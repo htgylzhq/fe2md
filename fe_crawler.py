@@ -8,6 +8,17 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+_LI_CLASS_RE = re.compile(r"li(\d+)$")
+_MARU_CLASS_RE = re.compile(r"maru(\d+)$")
+
+_CIRCLED_NUMBERS = {
+    1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤",
+    6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨", 10: "⑩",
+    11: "⑪", 12: "⑫", 13: "⑬", 14: "⑭", 15: "⑮",
+    16: "⑯", 17: "⑰", 18: "⑱", 19: "⑲", 20: "⑳",
+}
+
+
 def clean_text(text):
     if not text:
         return ""
@@ -34,14 +45,85 @@ def download_image(img_url, output_dir, prefix="", assets_dir_name="assets"):
         print(f"Error downloading image {img_url}: {e}")
         return None
 
+
+def _get_ordered_start(list_element):
+    if list_element.name != 'ol':
+        return 1
+    try:
+        return int(list_element.get("start", 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _circled_number(value: int) -> str:
+    return _CIRCLED_NUMBERS.get(value, f"({value})")
+
+
+def _marker_from_classes(li_element):
+    class_number = None
+    maru_number = None
+    for cls in li_element.get('class', []):
+        if (li_match := _LI_CLASS_RE.match(cls)):
+            class_number = int(li_match.group(1))
+        elif (maru_match := _MARU_CLASS_RE.match(cls)):
+            maru_number = int(maru_match.group(1))
+
+    if maru_number is not None:
+        return _circled_number(maru_number)
+
+    if class_number is not None:
+        return f"({class_number})"
+
+    return None
+
+
+def _marker_from_type(list_element, number, type_attr: str | None):
+    if list_element.name != 'ol' or not type_attr:
+        return None
+
+    lower_type = type_attr.lower()
+    if lower_type == 'a' and 1 <= number <= 26:
+        start_char = 'A' if type_attr == 'A' else 'a'
+        letter = chr(ord(start_char) + number - 1)
+        return f'{letter}.'
+
+    return None
+
+
+def _default_marker(list_element, number):
+    if list_element.name == 'ol':
+        return f"{number}."
+    return "-"
+
+
+def _get_list_marker(list_element, li_element, number):
+    """Return the marker string for a list item, preserving numbering when present."""
+    type_attr = (list_element.get("type") or "").strip()
+
+    if marker := _marker_from_classes(li_element):
+        return marker
+
+    if marker := _marker_from_type(list_element, number, type_attr):
+        return marker
+
+    return _default_marker(list_element, number)
+
+
 def process_list(list_element, base_url, output_dir, prefix, indent_level=0):
     """Process a ul or ol element and return markdown with proper indentation."""
     md_lines = []
-    indent = "  " * indent_level  # 2 spaces per indent level
+    indent_unit = "　"  # full-width space to ensure visible indentation in rendered markdown
+    indent = indent_unit * indent_level
+    start_value = _get_ordered_start(list_element)
+    current_number = start_value
     
     for li in list_element.find_all('li', recursive=False):
         # Get direct text content (not from nested lists)
         li_text = ""
+        try:
+            value_number = int(li.get('value'))
+        except (TypeError, ValueError):
+            value_number = None
         
         for child in li.children:
             if child.name == 'span' and 'bb' in child.get('class', []):
@@ -50,12 +132,17 @@ def process_list(list_element, base_url, output_dir, prefix, indent_level=0):
             elif child.name in ['ul', 'ol']:
                 # Nested list - process with increased indentation
                 nested_text = process_list(child, base_url, output_dir, prefix, indent_level + 1)
-                li_text += "\n" + nested_text
+                # Add a blank line before nested list for readability
+                li_text += "\n\n" + nested_text
             elif child.name is None:
-                # Only add non-whitespace text
-                text = child.string.strip() if child.string else ""
-                if text:
-                    li_text += text
+                if child.string:
+                    stripped_text = child.string.strip()
+                    if stripped_text:
+                        prefix_space = ""
+                        if child.string[0].isspace() and li_text and not li_text.endswith((" ", "\n")):
+                            prefix_space = " "
+                        suffix_space = " " if child.string[-1].isspace() else ""
+                        li_text += f"{prefix_space}{stripped_text}{suffix_space}"
             elif child.name == 'u':
                 u_content = ""
                 for u_child in child.children:
@@ -70,16 +157,26 @@ def process_list(list_element, base_url, output_dir, prefix, indent_level=0):
                     text = child.get_text().strip()
                     if text:
                         li_text += text
-        
-        # Add the list item with proper indentation
-        md_lines.append(f"{indent}- {li_text.strip()}")
+
+        # Normalize trailing spaces before newlines but keep leading indentation for nested lists
+        li_text = re.sub(r"[ \t]+\n", "\n", li_text)
+        li_text = li_text.rstrip()
+        number_for_marker = value_number if value_number is not None else current_number
+        marker = _get_list_marker(list_element, li, number_for_marker)
+        md_lines.append(f"{indent}{marker} {li_text}")
+        if list_element.name == 'ol':
+            current_number = number_for_marker + 1
     
-    return "\n".join(md_lines)
+    return "\n\n".join(md_lines)
 
 
 def process_element(element, base_url, output_dir, prefix=""):
     """Processes a single element and returns markdown text."""
     md_text = ""
+
+    if element.name in ['ul', 'ol']:
+        # Delegate list processing to keep numbering consistent
+        return process_list(element, base_url, output_dir, prefix) + "\n\n"
     
     # Handle images directly
     if element.name == 'img':
@@ -104,35 +201,6 @@ def process_element(element, base_url, output_dir, prefix=""):
              md_text += f"<u>&emsp;{text}&emsp;</u>"
         elif child.name == 'br':
              md_text += "\n\n"
-        elif child.name == 'li':
-             # List items - process children recursively to preserve span.bb formatting and nested lists
-             li_text = ""
-             has_nested_list = False
-             
-             for li_child in child.children:
-                 if li_child.name == 'span' and 'bb' in li_child.get('class', []):
-                     text = li_child.get_text().strip()
-                     li_text += f"<u>&emsp;{text}&emsp;</u>"
-                 elif li_child.name in ['ul', 'ol']:
-                     # Found nested list - process it separately
-                     has_nested_list = True
-                     nested_list_text = process_list(li_child, base_url, output_dir, prefix, indent_level=1)
-                     li_text += "\n" + nested_list_text
-                 elif li_child.name is None:
-                     li_text += li_child.string if li_child.string else ""
-                 elif li_child.name == 'u':
-                     # Preserve underline tags in list items
-                     u_content = ""
-                     for u_child in li_child.children:
-                         if u_child.name is None:
-                             u_content += u_child.string if u_child.string else ""
-                         else:
-                             u_content += u_child.get_text()
-                     li_text += f"<u>{u_content}</u>"
-                 else:
-                     li_text += li_child.get_text().strip()
-             
-             md_text += f"- {li_text.strip()}\n"
         elif child.name is None: # NavigableString
              md_text += child.string if child.string else ""
         elif child.name == 'u':
