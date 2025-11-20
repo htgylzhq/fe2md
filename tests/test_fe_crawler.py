@@ -157,12 +157,107 @@ def test_process_list_handles_nested_lists(monkeypatch, tmp_path):
     )
 
     # Should have properly indented nested list
-    assert "- Item 1\n  - Nested 1\n  - Nested 2\n- Item 2" in output
+    assert "- Item 1\n\n　1. Nested 1\n\n　2. Nested 2\n\n- Item 2" in output
 
 
+def test_process_list_formats_ordered_lists(monkeypatch, tmp_path):
+    html = """
+    <ol>
+        <li>Step 1</li>
+        <li>Step 2</li>
+    </ol>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    ol = soup.ol
+
+    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
+
+    output = fe_crawler.process_list(
+        ol, "https://example.com", tmp_path, ""
+    )
+
+    assert "1. Step 1" in output
+    assert "2. Step 2" in output
 
 
+def test_process_list_uses_numbered_classes(monkeypatch, tmp_path):
+    html = """
+    <ul>
+        <li class="li1">Case one</li>
+        <li class="li2">Case two</li>
+    </ul>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    ul = soup.ul
 
+    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
+
+    output = fe_crawler.process_list(
+        ul, "https://example.com", tmp_path, ""
+    )
+
+    assert "(1) Case one" in output
+    assert "(2) Case two" in output
+
+
+def test_process_list_formats_alpha_ordered_lists(monkeypatch, tmp_path):
+    html = """
+    <ol type="a">
+        <li>Alpha</li>
+        <li>Beta</li>
+    </ol>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    ol = soup.ol
+
+    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
+
+    output = fe_crawler.process_list(
+        ol, "https://example.com", tmp_path, ""
+    )
+
+    assert "a. Alpha" in output
+    assert "b. Beta" in output
+
+
+def test_process_list_formats_alpha_with_value(monkeypatch, tmp_path):
+    html = """
+    <ol type="a">
+        <li value="5">Fifth</li>
+        <li>Sixth</li>
+    </ol>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    ol = soup.ol
+
+    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
+
+    output = fe_crawler.process_list(
+        ol, "https://example.com", tmp_path, ""
+    )
+
+    assert "e. Fifth" in output
+    assert "f. Sixth" in output
+
+
+def test_process_list_handles_maru_numbering(monkeypatch, tmp_path):
+    html = """
+    <ol>
+        <li class="maru1">Alpha</li>
+        <li class="maru2">Beta</li>
+    </ol>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    ol = soup.ol
+
+    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
+
+    output = fe_crawler.process_list(
+        ol, "https://example.com", tmp_path, ""
+    )
+
+    assert "① Alpha" in output
+    assert "② Beta" in output
 
 
 def test_main_writes_output_when_main_container_present(monkeypatch, tmp_path):
