@@ -1,15 +1,29 @@
+"""Tests for the FE Exam Crawler."""
 import io
 
-import fe_crawler
 from bs4 import BeautifulSoup
+import pytest
+
+import fe_crawler
+
+
+@pytest.fixture
+def no_image_download(monkeypatch):  # pylint: disable=redefined-outer-name,unused-argument
+    """Fixture to mock download_image to do nothing."""
+    monkeypatch.setattr(fe_crawler, "download_image",
+                        lambda *args, **kwargs: None)
 
 
 def test_download_image_writes_file(monkeypatch, tmp_path):
+    """Test that download_image saves the file and returns correct path."""
     class DummyResponse:
+        """Mock response object."""
+
         def __init__(self, content: bytes):
             self.raw = io.BytesIO(content)
 
         def raise_for_status(self):
+            """Mock raise_for_status."""
             return None
 
     content = b"helloworld"
@@ -30,13 +44,15 @@ def test_download_image_writes_file(monkeypatch, tmp_path):
 
 
 def test_process_element_handles_image_and_prefix(monkeypatch, tmp_path):
+    """Test that process_element handles images and applies prefix."""
     img_html = '<img src="img/sample.png"/>'
     soup = BeautifulSoup(img_html, "html.parser")
     img_tag = soup.img
 
     captured = {}
 
-    def fake_download(url, output_dir, prefix=""):
+    def fake_download(url, _output_dir, prefix=""):
+
         captured["url"] = url
         captured["prefix"] = prefix
         return "./assets/fake.png"
@@ -54,7 +70,9 @@ def test_process_element_handles_image_and_prefix(monkeypatch, tmp_path):
     }
 
 
-def test_process_element_formats_lists_and_blanks(monkeypatch, tmp_path):
+def test_process_element_formats_lists_and_blanks(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test formatting of lists and fill-in-the-blank spans."""
+
     html = """
     <div class="mondai">
       Text <span class="bb">a</span><br>
@@ -63,8 +81,6 @@ def test_process_element_formats_lists_and_blanks(monkeypatch, tmp_path):
     """
     soup = BeautifulSoup(html, "html.parser")
     mondai_div = soup.find("div", class_="mondai")
-
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
 
     output = fe_crawler.process_element(
         mondai_div, "https://example.com/base/", tmp_path, prefix=""
@@ -75,12 +91,12 @@ def test_process_element_formats_lists_and_blanks(monkeypatch, tmp_path):
     assert "Text" in output
 
 
-def test_process_element_adds_newline_before_list(monkeypatch, tmp_path):
+def test_process_element_adds_newline_before_list(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test that a newline is added before a list element."""
+
     html = "<div>Text line<ul><li>List Item</li></ul></div>"
     soup = BeautifulSoup(html, "html.parser")
     div = soup.div
-
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
 
     output = fe_crawler.process_element(
         div, "https://example.com", tmp_path
@@ -90,12 +106,12 @@ def test_process_element_adds_newline_before_list(monkeypatch, tmp_path):
     assert "Text line\n\n- List Item" in output
 
 
-def test_process_element_handles_span_bb_in_list(monkeypatch, tmp_path):
+def test_process_element_handles_span_bb_in_list(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test handling of span.bb within list items."""
+
     html = '<ul><li>Text with <span class="bb">a</span> blank</li></ul>'
     soup = BeautifulSoup(html, "html.parser")
     ul = soup.ul
-
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
 
     output = fe_crawler.process_element(
         ul, "https://example.com", tmp_path
@@ -105,12 +121,12 @@ def test_process_element_handles_span_bb_in_list(monkeypatch, tmp_path):
     assert "- Text with <u>&emsp;a&emsp;</u> blank" in output
 
 
-def test_process_element_adds_newline_after_list(monkeypatch, tmp_path):
+def test_process_element_adds_newline_after_list(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test that a newline is added after a list element."""
+
     html = "<div><ul><li>Item</li></ul>Following text</div>"
     soup = BeautifulSoup(html, "html.parser")
     div = soup.div
-
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
 
     output = fe_crawler.process_element(
         div, "https://example.com", tmp_path
@@ -120,12 +136,12 @@ def test_process_element_adds_newline_after_list(monkeypatch, tmp_path):
     assert "- Item\n\nFollowing text" in output
 
 
-def test_process_element_preserves_u_tags(monkeypatch, tmp_path):
+def test_process_element_preserves_u_tags(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test that <u> tags are preserved in the output."""
+
     html = "<div>Text with <u>underlined content</u> here</div>"
     soup = BeautifulSoup(html, "html.parser")
     div = soup.div
-
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
 
     output = fe_crawler.process_element(
         div, "https://example.com", tmp_path
@@ -135,7 +151,9 @@ def test_process_element_preserves_u_tags(monkeypatch, tmp_path):
     assert "<u>underlined content</u>" in output
 
 
-def test_process_list_handles_nested_lists(monkeypatch, tmp_path):
+def test_process_list_handles_nested_lists(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test processing of nested lists with indentation."""
+
     html = """
     <ul>
         <li>Item 1
@@ -150,8 +168,6 @@ def test_process_list_handles_nested_lists(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ul = soup.ul
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ul, "https://example.com", tmp_path, ""
     )
@@ -160,7 +176,9 @@ def test_process_list_handles_nested_lists(monkeypatch, tmp_path):
     assert "- Item 1\n\n　1. Nested 1\n\n　2. Nested 2\n\n- Item 2" in output
 
 
-def test_process_list_formats_ordered_lists(monkeypatch, tmp_path):
+def test_process_list_formats_ordered_lists(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test formatting of standard ordered lists."""
+
     html = """
     <ol>
         <li>Step 1</li>
@@ -170,8 +188,6 @@ def test_process_list_formats_ordered_lists(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ol = soup.ol
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ol, "https://example.com", tmp_path, ""
     )
@@ -180,7 +196,9 @@ def test_process_list_formats_ordered_lists(monkeypatch, tmp_path):
     assert "2. Step 2" in output
 
 
-def test_process_list_uses_numbered_classes(monkeypatch, tmp_path):
+def test_process_list_uses_numbered_classes(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test that list items with numbered classes (li1, li2) are formatted correctly."""
+
     html = """
     <ul>
         <li class="li1">Case one</li>
@@ -190,8 +208,6 @@ def test_process_list_uses_numbered_classes(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ul = soup.ul
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ul, "https://example.com", tmp_path, ""
     )
@@ -200,7 +216,9 @@ def test_process_list_uses_numbered_classes(monkeypatch, tmp_path):
     assert "(2) Case two" in output
 
 
-def test_process_list_formats_alpha_ordered_lists(monkeypatch, tmp_path):
+def test_process_list_formats_alpha_ordered_lists(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test formatting of ordered lists with type='a'."""
+
     html = """
     <ol type="a">
         <li>Alpha</li>
@@ -210,8 +228,6 @@ def test_process_list_formats_alpha_ordered_lists(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ol = soup.ol
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ol, "https://example.com", tmp_path, ""
     )
@@ -220,7 +236,9 @@ def test_process_list_formats_alpha_ordered_lists(monkeypatch, tmp_path):
     assert "b. Beta" in output
 
 
-def test_process_list_formats_alpha_with_value(monkeypatch, tmp_path):
+def test_process_list_formats_alpha_with_value(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test formatting of alpha ordered lists with custom value attributes."""
+
     html = """
     <ol type="a">
         <li value="5">Fifth</li>
@@ -230,8 +248,6 @@ def test_process_list_formats_alpha_with_value(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ol = soup.ol
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ol, "https://example.com", tmp_path, ""
     )
@@ -240,7 +256,9 @@ def test_process_list_formats_alpha_with_value(monkeypatch, tmp_path):
     assert "f. Sixth" in output
 
 
-def test_process_list_handles_maru_numbering(monkeypatch, tmp_path):
+def test_process_list_handles_maru_numbering(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test handling of 'maru' class numbering (e.g., ①)."""
+
     html = """
     <ol>
         <li class="maru1">Alpha</li>
@@ -250,8 +268,6 @@ def test_process_list_handles_maru_numbering(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ol = soup.ol
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ol, "https://example.com", tmp_path, ""
     )
@@ -260,7 +276,9 @@ def test_process_list_handles_maru_numbering(monkeypatch, tmp_path):
     assert "② Beta" in output
 
 
-def test_process_list_handles_kana_classes(monkeypatch, tmp_path):
+def test_process_list_handles_kana_classes(no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test handling of 'kana' class numbering (e.g., ア、)."""
+
     html = """
     <ul>
         <li class="lia">Option A</li>
@@ -270,8 +288,6 @@ def test_process_list_handles_kana_classes(monkeypatch, tmp_path):
     soup = BeautifulSoup(html, "html.parser")
     ul = soup.ul
 
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
-
     output = fe_crawler.process_list(
         ul, "https://example.com", tmp_path, ""
     )
@@ -280,7 +296,9 @@ def test_process_list_handles_kana_classes(monkeypatch, tmp_path):
     assert "イ、 Option B" in output
 
 
-def test_main_writes_output_when_main_container_present(monkeypatch, tmp_path):
+def test_main_writes_output_when_main_container_present(monkeypatch, no_image_download, tmp_path):  # pylint: disable=redefined-outer-name,unused-argument
+    """Test that main() writes the output file when the main container is found."""
+
     html = """
     <div class="main kako">
       <div class="mondai">Question text</div>
@@ -288,16 +306,21 @@ def test_main_writes_output_when_main_container_present(monkeypatch, tmp_path):
     """
 
     class DummyResponse:
+        """Mock response object."""
+
         def __init__(self, text):
+            """Initialize the mock response."""
             self.text = text
             self._encoding = "utf-8"
             self.apparent_encoding = "utf-8"
 
         def raise_for_status(self):
+            """Mock raise_for_status."""
             return None
 
         @property
         def encoding(self):
+            """Mock encoding property."""
             return self._encoding
 
         @encoding.setter
@@ -305,11 +328,12 @@ def test_main_writes_output_when_main_container_present(monkeypatch, tmp_path):
             self._encoding = value
 
     monkeypatch.setattr(
-        fe_crawler.requests, "get", lambda url: DummyResponse(html)
+        fe_crawler.requests, "get", lambda url, **kwargs: DummyResponse(html)
     )
-    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
 
     class DummyArgs:
+
+        """Mock arguments object."""
         url = "https://example.com/q/30_haru/pm04.html"
         output = tmp_path
 
