@@ -18,6 +18,11 @@ _CIRCLED_NUMBERS = {
     16: "⑯", 17: "⑰", 18: "⑱", 19: "⑲", 20: "⑳",
 }
 
+_KANA_MAP = {
+    "lia": "ア", "lii": "イ", "liu": "ウ", "lie": "エ", "lio": "オ",
+    "lika": "カ", "liki": "キ", "liku": "ク", "like": "ケ", "liko": "コ",
+}
+
 
 def clean_text(text):
     if not text:
@@ -63,6 +68,8 @@ def _marker_from_classes(li_element):
     class_number = None
     maru_number = None
     for cls in li_element.get('class', []):
+        if cls in _KANA_MAP:
+            return f"{_KANA_MAP[cls]}、"
         if (li_match := _LI_CLASS_RE.match(cls)):
             class_number = int(li_match.group(1))
         elif (maru_match := _MARU_CLASS_RE.match(cls)):
@@ -309,57 +316,8 @@ def main():
                 
             # Answer Groups
             if element.get('class') and 'select' in element.get('class') and 'ansbg' in element.get('class'):
-                # Format:
-                # ---
-                # a に関する解答群
-                # ア、A ...
-                
-                # The text usually contains "a に関する解答群"
-                # The options are in a list <ul>
-                
-                # Extract header text (e.g. "a に関する解答群")
-                # It might be direct text or inside a child?
-                # In sample: <div class="select ansbg">a に関する解答群<ul ...>...</ul></div>
-                
-                # Let's get the text excluding the list first
-                header_text = ""
-                for child in element.children:
-                    if child.name is None:
-                        header_text += child.string.strip()
-                
                 markdown_content += "---\n\n"
-                markdown_content += f"{header_text}\n\n"
-                
-                ul = element.find('ul')
-                if ul:
-                    for li in ul.find_all('li'):
-                        # Class indicates option char? <li class="lia">A</li> -> ア、A
-                        # Mapping classes to chars: lia->ア, lii->イ, liu->ウ, lie->エ, lio->オ, lika->カ, liki->キ, liku->ク
-                        # Or just use the index?
-                        # The sample says: "ア、A"
-                        # Let's try to map class if possible, or just use standard katakana if not.
-                        # Actually, the sample output has "ア、A".
-                        # The HTML has `<li class="lia">A</li>`.
-                        # I need a mapping.
-                        
-                        c = li.get('class', [])
-                        prefix_char = ""
-                        if 'lia' in c: prefix_char = "ア"
-                        elif 'lii' in c: prefix_char = "イ"
-                        elif 'liu' in c: prefix_char = "ウ"
-                        elif 'lie' in c: prefix_char = "エ"
-                        elif 'lio' in c: prefix_char = "オ"
-                        elif 'lika' in c: prefix_char = "カ"
-                        elif 'liki' in c: prefix_char = "キ"
-                        elif 'liku' in c: prefix_char = "ク"
-                        elif 'like' in c: prefix_char = "ケ"
-                        elif 'liko' in c: prefix_char = "コ"
-                        
-                        text = li.get_text().strip()
-                        if prefix_char:
-                            markdown_content += f"{prefix_char}、{text}\n\n"
-                        else:
-                            markdown_content += f"{text}\n\n"
+                markdown_content += process_element(element, url, output_dir, prefix).rstrip() + "\n\n"
                 continue
 
             # Handle images that might be direct children (e.g. inside div.img_margin)
