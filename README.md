@@ -10,6 +10,10 @@ A Python crawler for scraping Japanese Fundamental Information Technology Engine
 - ✅ Preserve special formatting (fill-in-blanks, underlines, nested lists)
 - 📂 Customizable output directory
 
+## Prerequisites
+
+- Python 3.10 or higher
+
 ## Installation
 
 ```bash
