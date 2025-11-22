@@ -260,6 +260,26 @@ def test_process_list_handles_maru_numbering(monkeypatch, tmp_path):
     assert "② Beta" in output
 
 
+def test_process_list_handles_kana_classes(monkeypatch, tmp_path):
+    html = """
+    <ul>
+        <li class="lia">Option A</li>
+        <li class="lii">Option B</li>
+    </ul>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    ul = soup.ul
+
+    monkeypatch.setattr(fe_crawler, "download_image", lambda *args, **kwargs: None)
+
+    output = fe_crawler.process_list(
+        ul, "https://example.com", tmp_path, ""
+    )
+
+    assert "ア、 Option A" in output
+    assert "イ、 Option B" in output
+
+
 def test_main_writes_output_when_main_container_present(monkeypatch, tmp_path):
     html = """
     <div class="main kako">
