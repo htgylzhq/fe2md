@@ -1,3 +1,4 @@
+"""Pytest configuration and fixtures for FE crawler tests."""
 import sys
 import os
 
