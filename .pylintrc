@@ -1,0 +1,17 @@
+[MASTER]
+# Specify a score threshold to be exceeded before program exits with error.
+fail-under=9.0
+
+[MESSAGES CONTROL]
+# Disable specific warnings that are not useful in this context
+disable=
+    too-few-public-methods,  # Common in test helpers and data classes
+
+[DESIGN]
+# Relax complexity limits for HTML parsing logic
+max-args=8
+max-locals=25
+max-branches=18
+max-statements=60
+max-attributes=10
+max-nested-blocks=6
